@@ -1,6 +1,6 @@
 services:
   api-1:
-    build: ./src
+    build: .
     ports:
       - "8000:8000"
     deploy:
@@ -8,19 +8,20 @@ services:
         limits:
           cpus: "0.45"
           memory: "165MB"
-  api-2:
-    build: ./src
-    ports:
-      - "8001:8001"
-    deploy:
-      resources:
-        limits:
-          cpus: "0.45"
-          memory: "165MB"
+  # api-2:
+  #   ports:
+  #     - "8001:8001"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.45"
+  #         memory: "165MB"
   lb:
     image: haproxy:3.3-alpine
     ports:
       - "9999:9999"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     deploy:
       resources:
         limits:
@@ -28,4 +29,4 @@ services:
           memory: "20MB"
     depends_on:
       - api-1
-      - api-2
+      # - api-2
