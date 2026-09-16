@@ -1,22 +1,24 @@
 services:
   api-1:
+    container_name: api-1
+    hostname: api-1
     build: .
-    ports:
-      - "8000:8000"
     deploy:
       resources:
         limits:
           cpus: "0.45"
           memory: "165MB"
-  # api-2:
-  #   ports:
-  #     - "8001:8001"
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: "0.45"
-  #         memory: "165MB"
+  api-2:
+    container_name: api-2
+    hostname: api-2
+    build: .
+    deploy:
+      resources:
+        limits:
+          cpus: "0.45"
+          memory: "165MB"
   lb:
+    container_name: load-balancer
     image: haproxy:3.3-alpine
     ports:
       - "9999:9999"
@@ -29,4 +31,4 @@ services:
           memory: "20MB"
     depends_on:
       - api-1
-      # - api-2
+      - api-2
