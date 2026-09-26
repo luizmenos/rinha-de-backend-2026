@@ -8,9 +8,10 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-enable swoole \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY ext/kdtree/ /usr/src/kdtree/
+COPY lib/ /usr/src/lib/
+COPY ext/kdtree/ /usr/src/ext/kdtree/
 
-RUN cd /usr/src/kdtree \
+RUN cd /usr/src/ext/kdtree \
     && phpize \
     && ./configure --enable-kdtree \
     && make \
