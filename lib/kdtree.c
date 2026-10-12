@@ -1,135 +1,134 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <float.h>
+#include <kdtree.h>
 
-#define DIMENSIONS 14 // 14 dimensoes conforme docs do desafio https://github.com/zanfranceschi/rinha-de-backend-2026/tree/main/docs/br
+static int sort_axis = 0;
 
-int sort_axis = 0;
-
-typedef struct Node
+static Node *create_node(const double *point, int is_fraud)
 {
-    double point[DIMENSIONS];
-    struct Node *left;
-    struct Node *right;
-} Node;
-
-Node *create_node(const double *point)
-{
-    Node *node = (Node *)malloc(sizeof(Node));
-
+    Node *node = malloc(sizeof(*node));
     if (node == NULL)
         return NULL;
 
     for (int i = 0; i < DIMENSIONS; i++)
-    {
         node->point[i] = point[i];
-    }
 
+    node->is_fraud = (unsigned char)(is_fraud != 0);
     node->left = NULL;
     node->right = NULL;
     return node;
 }
 
-typedef struct KDTree
+static int compare_references(const void *a, const void *b)
 {
-    Node *root;
-} KDTree;
+    const Reference *ref_a = a;
+    const Reference *ref_b = b;
 
-int compare_points(const void *a, const void *b)
-{
-    const double *point_a = (const double *)a;
-    const double *point_b = (const double *)b;
-
-    if (point_a[sort_axis] < point_b[sort_axis])
+    if (ref_a->point[sort_axis] < ref_b->point[sort_axis])
         return -1;
-    if (point_a[sort_axis] > point_b[sort_axis])
+    if (ref_a->point[sort_axis] > ref_b->point[sort_axis])
         return 1;
     return 0;
 }
 
-Node *build_tree(double points[][DIMENSIONS], int num_points, int depth)
+Node *build_tree(Reference *references, int num_points, int depth)
 {
-    if (num_points == 0)
+    if (num_points <= 0)
         return NULL;
 
     sort_axis = depth % DIMENSIONS;
-
-    qsort(points, num_points, sizeof(points[0]), compare_points);
+    qsort(references, (size_t)num_points, sizeof(*references), compare_references);
 
     int mid = num_points / 2;
 
-    Node *root = create_node(points[mid]);
-    if (!root)
+    Node *root = create_node(
+        references[mid].point,
+        references[mid].is_fraud);
+
+    if (root == NULL)
         return NULL;
 
-    root->left = build_tree(points, mid, depth + 1);
-    root->right = build_tree(&points[mid + 1], num_points - mid - 1, depth + 1);
+    root->left = build_tree(references, mid, depth + 1);
+    root->right = build_tree(
+        references + mid + 1,
+        num_points - mid - 1,
+        depth + 1);
 
     return root;
 }
 
-double squared_distance(const double *p1, const double *p2)
+static double squared_distance(const double *a, const double *b)
 {
     double sum = 0.0;
     for (int i = 0; i < DIMENSIONS; i++)
     {
-        double diff = p1[i] - p2[i];
+        double diff = a[i] - b[i];
         sum += diff * diff;
     }
     return sum;
 }
 
-void search_nearest_recursive(Node *root, const double *target, int depth, Node **best_node, double *best_distance)
+static void insert_candidate(Candidate best[K_NEIGHBORS], int *count,
+                             Node *node, double distance)
+{
+    int pos;
+    if (*count < K_NEIGHBORS)
+    {
+        pos = (*count)++;
+    }
+    else
+    {
+        if (distance >= best[K_NEIGHBORS - 1].distance)
+            return;
+        pos = K_NEIGHBORS - 1;
+    }
+
+    while (pos > 0 && distance < best[pos - 1].distance)
+    {
+        best[pos] = best[pos - 1];
+        pos--;
+    }
+    best[pos].node = node;
+    best[pos].distance = distance;
+}
+
+static void search_5_recursive(Node *root, const double *target, int depth,
+                               Candidate best[K_NEIGHBORS], int *count)
 {
     if (root == NULL)
         return;
 
-    double current_distance = squared_distance(root->point, target);
-
-    if (current_distance < *best_distance)
-    {
-        *best_distance = current_distance;
-        *best_node = root;
-    }
+    insert_candidate(best, count, root, squared_distance(root->point, target));
 
     int axis = depth % DIMENSIONS;
+    double delta = target[axis] - root->point[axis];
+    Node *near_child = delta < 0.0 ? root->left : root->right;
+    Node *far_child = delta < 0.0 ? root->right : root->left;
 
-    Node *near_child = (target[axis] < root->point[axis]) ? root->left : root->right;
-    Node *far_child = (target[axis] < root->point[axis]) ? root->right : root->left;
+    search_5_recursive(near_child, target, depth + 1, best, count);
 
-    search_nearest_recursive(near_child, target, depth + 1, best_node, best_distance);
-
-    double axis_diff = target[axis] - root->point[axis];
-    double squared_diff = axis_diff * axis_diff;
-
-    if (squared_diff < *best_distance)
-    {
-        search_nearest_recursive(far_child, target, depth + 1, best_node, best_distance);
-    }
+    /* Until there are 5 candidates, the far side cannot be safely pruned. */
+    double worst_distance = *count < K_NEIGHBORS
+                                ? DBL_MAX
+                                : best[K_NEIGHBORS - 1].distance;
+    if (delta * delta <= worst_distance)
+        search_5_recursive(far_child, target, depth + 1, best, count);
 }
 
-Node *search_nearest_neighbor(Node *root, const double *target)
+int search_5_nearest_neighbors(Node *root, const double *target,
+                               Candidate best[K_NEIGHBORS])
 {
-    if (root == NULL)
-        return NULL;
-
-    Node *best_node = NULL;
-    double best_distance = DBL_MAX;
-
-    search_nearest_recursive(root, target, 0, &best_node, &best_distance);
-
-    return best_node;
+    int count = 0;
+    search_5_recursive(root, target, 0, best, &count);
+    return count;
 }
 
 void destroy_tree(Node *root)
 {
-    if (!root)
+    if (root == NULL)
         return;
-
     destroy_tree(root->left);
     destroy_tree(root->right);
-
     free(root);
-
-    return;
 }
