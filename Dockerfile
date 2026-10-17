@@ -18,10 +18,11 @@ RUN cd /usr/src/ext/kdtree \
     && make install \
     && docker-php-ext-enable kdtree
 
-WORKDIR /php
+WORKDIR /app
 
-COPY /php/ /php/
+COPY app/ /app/app/
+COPY php/ /app/php/
 
 EXPOSE 8080
 
-CMD [ "php", "server.php" ]
+CMD [ "php", "php/server.php" ]

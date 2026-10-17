@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../app/Vector.php';
+
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Swoole\Http\Server;
+use App\Vector;
 
 $server = new Server(host: "0.0.0.0", port: 8080);
 
@@ -26,9 +29,27 @@ $server->on("Request", function (Request $request, Response $response) {
     if ($uri === "/fraud-score") {
         if ($method === 'POST') {
             $body = $request->rawContent();
+            if (empty($body)) {
+                $response->status(400);
+                $response->end('');
+                return;
+            }
+
+            $payload = json_decode($body, true);
+
+            if (!is_array($payload)) {
+                $response->status(400);
+                $response->end('');
+                return;
+            }
+
+            $vector = new Vector();
 
             $response->status(200);
             $response->header("Content-Type", "application/json");
+
+            $vec = $vector->vectorize($payload);
+            $response->end(json_encode($vec));
             /**
              * 
              * @todo return something like this:
@@ -47,9 +68,8 @@ $server->on("Request", function (Request $request, Response $response) {
         return;
     }
 
-    $response->header("Content-Type", "text/plain");
-    $response->header("X-Backend", gethostname());
-    $response->end("Hello World\n");
+    $response->status(404);
+    $response->end("");
 });
 
 $server->start();

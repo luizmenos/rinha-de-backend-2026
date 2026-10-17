@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App;
 
+use DateTime;
+use DateTimeImmutable;
+use DateTimeZone;
+
 final class Vector
 {
     public const array MCC_RISK = [
@@ -19,6 +23,17 @@ final class Vector
         "5999" =>  0.50
     ];
 
+    /**
+     * @var array{
+     *     max_amount: int,
+     *     max_installments: int,
+     *     amount_vs_avg_ratio: int,
+     *     max_minutes: int,
+     *     max_km: int,
+     *     max_tx_count_24h: int,
+     *     max_merchant_avg_amount: int
+     * }
+     */
     public const array NORMALIZATION_VALUES = [
         "max_amount" => 10000,
         "max_installments" =>  12,
@@ -65,16 +80,33 @@ final class Vector
         $requestedAtMonth = (int) substr($requestedAt, 5, 2);
         $requestedAtDay = (int) substr($requestedAt, 8, 2);
         $requestedAtHour = (int) substr($requestedAt, 11, 2);
-        $requestedAtMin = (int) substr($requestedAt, 14, 2);
-
         $requestedAtWeekDay = $this->weekDay($requestedAtYear, $requestedAtMonth, $requestedAtDay);
+
+        $kmFromCurrent = null;
+        $minutesBetween = null;
+
+        if ($lastTransaction) {
+            $lastTransactionTimestamp = $lastTransaction['timestamp'];
+            $kmFromCurrent = (float) $lastTransaction['km_from_current'];
+            $minutesBetween = $this->minutesBetween(new Datetime($requestedAt), new DateTime("{$lastTransactionTimestamp}"));
+        }
 
         $vector = [];
 
         $vector[] = $this->clamp($transaction["amount"] / self::NORMALIZATION_VALUES["max_amount"]);
         $vector[] = $this->clamp($transaction["installments"] / self::NORMALIZATION_VALUES["max_installments"]);
         $vector[] = $this->clamp(($transaction["amount"] / $customer['avg_amount']) / self::NORMALIZATION_VALUES["amount_vs_avg_ratio"]);
-        $vector[] = $this->clamp($requestedAtHour / 23.0);
+        $vector[] = $requestedAtHour / 23.0;
+        $vector[] = $requestedAtWeekDay / 6;
+        $vector[] = $minutesBetween ? $this->clamp($minutesBetween / self::NORMALIZATION_VALUES["max_minutes"]) : -1;
+        $vector[] = $kmFromCurrent ? $this->clamp($kmFromCurrent / self::NORMALIZATION_VALUES["max_km"]) : -1;
+        $vector[] = $this->clamp($terminal['km_from_home'] / self::NORMALIZATION_VALUES['max_km']);
+        $vector[] = $this->clamp($customer['tx_count_24h'] / self::NORMALIZATION_VALUES['max_tx_count_24h']);
+        $vector[] = intval($terminal['is_online']);
+        $vector[] = intval($terminal['card_present']);
+        $vector[] = intval(!in_array($merchant['id'], $customer['known_merchants']));
+        $vector[] = self::MCC_RISK[$merchant['mcc']] ?? 0.5;
+        $vector[] = $this->clamp($merchant['avg_amount'] / self::NORMALIZATION_VALUES['max_merchant_avg_amount']);
 
         return $vector;
     }
@@ -98,6 +130,18 @@ final class Vector
 
     private function weekDay(int $year, int $month, int $day): int
     {
-        return (int)date('w', mktime(0, 0, 0, $month, $day, $year));
+        return (int) (new DateTimeImmutable(
+            sprintf('%04d-%02d-%02d', $year, $month, $day),
+            new DateTimeZone('UTC')
+        ))->format('N') - 1;
+    }
+
+    private function minutesBetween(DateTime $from, DateTime $to): int
+    {
+        $since = $from->diff($to);
+        $minutes = $since->days * 24 * 60;
+        $minutes += $since->h * 60;
+        $minutes += $since->i;
+        return $minutes;
     }
 }
