@@ -98,8 +98,8 @@ final class Vector
         $vector[] = $this->clamp(($transaction["amount"] / $customer['avg_amount']) / self::NORMALIZATION_VALUES["amount_vs_avg_ratio"]);
         $vector[] = $requestedAtHour / 23.0;
         $vector[] = $requestedAtWeekDay / 6;
-        $vector[] = $minutesBetween ? $this->clamp($minutesBetween / self::NORMALIZATION_VALUES["max_minutes"]) : -1;
-        $vector[] = $kmFromCurrent ? $this->clamp($kmFromCurrent / self::NORMALIZATION_VALUES["max_km"]) : -1;
+        $vector[] = $minutesBetween !== null ? $this->clamp($minutesBetween / self::NORMALIZATION_VALUES["max_minutes"]) : -1;
+        $vector[] = $kmFromCurrent !== null ? $this->clamp($kmFromCurrent / self::NORMALIZATION_VALUES["max_km"]) : -1;
         $vector[] = $this->clamp($terminal['km_from_home'] / self::NORMALIZATION_VALUES['max_km']);
         $vector[] = $this->clamp($customer['tx_count_24h'] / self::NORMALIZATION_VALUES['max_tx_count_24h']);
         $vector[] = intval($terminal['is_online']);
@@ -117,7 +117,7 @@ final class Vector
             $value = 0;
         }
         if ($value > 1) {
-            $value = 0;
+            $value = 1;
         }
 
         return $this->round($value);
