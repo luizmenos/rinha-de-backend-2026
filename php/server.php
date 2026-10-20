@@ -14,10 +14,25 @@ use App\KDTree;
 $vectorizer = new Vector();
 $tree = new KDTree(__DIR__ . '/../resources/references.idx');
 
-$server = new Server(host: "0.0.0.0", port: 8080);
+$socketPath = getenv('SOCKET_PATH') ?: '/run/sockets/api.sock';
+$socketDir = dirname($socketPath);
+if (!is_dir($socketDir) && !mkdir($socketDir, 0770, true) && !is_dir($socketDir)) {
+    throw new RuntimeException("Could not create socket directory: {$socketDir}");
+}
+if (file_exists($socketPath) || is_link($socketPath)) {
+    unlink($socketPath);
+}
 
-$server->on("Start", function (Server $server) {
-    echo "Server started at {$server->host}:{$server->port}";
+umask(0007);
+$server = new Server($socketPath, 0, SWOOLE_PROCESS, SWOOLE_SOCK_UNIX_STREAM);
+$server->set([
+    'worker_num' => 1,
+    'reactor_num' => 1,
+    'http_compression' => false,
+]);
+
+$server->on("Start", function () use ($socketPath) {
+    echo "Server started on unix socket {$socketPath}\n";
 });
 
 $server->on("Request", function (Request $request, Response $response) use ($vectorizer, $tree) {

@@ -27,10 +27,10 @@ RUN cd /usr/src/ext/kdtree \
 
 WORKDIR /app
 
+RUN mkdir -p /run/sockets && chmod 2770 /run/sockets
+
 COPY app/ /app/app/
 COPY php/ /app/php/
 COPY --from=index-builder /app/resources/references.idx /app/resources/references.idx
-
-EXPOSE 8080
 
 CMD [ "php", "php/server.php" ]

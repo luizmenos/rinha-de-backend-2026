@@ -3,6 +3,10 @@ services:
     container_name: api-1
     hostname: api-1
     build: .
+    environment:
+      SOCKET_PATH: /run/sockets/api-1.sock
+    volumes:
+      - sockets:/run/sockets
     deploy:
       resources:
         limits:
@@ -12,6 +16,10 @@ services:
     container_name: api-2
     hostname: api-2
     build: .
+    environment:
+      SOCKET_PATH: /run/sockets/api-2.sock
+    volumes:
+      - sockets:/run/sockets
     deploy:
       resources:
         limits:
@@ -20,10 +28,13 @@ services:
   lb:
     container_name: load-balancer
     image: haproxy:3.3-alpine
+    group_add:
+      - "0"
     ports:
       - "9999:9999"
     volumes:
       - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - sockets:/run/sockets
     deploy:
       resources:
         limits:
@@ -32,3 +43,6 @@ services:
     depends_on:
       - api-1
       - api-2
+
+volumes:
+  sockets:
